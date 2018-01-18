@@ -176,11 +176,11 @@ namespace FameBot.Core
             // Initialize and display gui if K-Relay is not in stealth mode.
             if (!StealthConfig.Default.StealthEnabled)
             {
-                ShowNewGUI();
+                ShowGUI();
             }
 
             // Hide / show gui based on the stealth mode status.
-            proxy.StealthStateChanged += enabled => { if (enabled) DestroyGUI(); else ShowNewGUI(); };
+            proxy.StealthStateChanged += enabled => { if (enabled) HideGUI(); else ShowGUI(); };
 
             // Get the config.
             config = ConfigManager.GetConfiguration();
@@ -312,7 +312,7 @@ namespace FameBot.Core
                     client.Notify("FameBot is starting");
                     break;
                 case "gui":
-                    ShowNewGUI();
+                    ShowGUI();
                     //gui.SetHandle(flashPtr);
                     break;
                 case "famebot":
@@ -982,17 +982,17 @@ namespace FameBot.Core
             }
         }
 
-        private void DestroyGUI()
+		private void HideGUI()
         {
-            gui?.Close();
-            gui?.Dispose();
+			logEvent = null;
+			gui?.Close();
         }
 
-        private void ShowNewGUI()
+        private void ShowGUI()
         {
-            DestroyGUI();
+			HideGUI();
 
-            gui = new FameBotGUI();
+			gui = new FameBotGUI();
             PluginUtils.ShowGUI(gui);
         }
     }
