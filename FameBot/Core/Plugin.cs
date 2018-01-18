@@ -173,8 +173,14 @@ namespace FameBot.Core
             enemies = new List<Enemy>();
             obstacles = new List<Obstacle>();
 
-            // Initialize and display gui.
-            ShowNewGUI();
+            // Initialize and display gui if K-Relay is not in stealth mode.
+            if (!StealthConfig.Default.StealthEnabled)
+            {
+                ShowNewGUI();
+            }
+
+            // Hide / show gui based on the stealth mode status.
+            proxy.StealthStateChanged += enabled => { if (enabled) DestroyGUI(); else ShowNewGUI(); };
 
             // Get the config.
             config = ConfigManager.GetConfiguration();
@@ -267,6 +273,11 @@ namespace FameBot.Core
                 packet.Text = message;
                 connectedClient.SendToServer(packet);
             };
+        }
+
+        private void Proxy_StealthStateChanged(bool enabled)
+        {
+            throw new NotImplementedException();
         }
 
         private void ReceiveCommand(Client client, string cmd, string[] args)
@@ -971,10 +982,15 @@ namespace FameBot.Core
             }
         }
 
-        private void ShowNewGUI()
+        private void DestroyGUI()
         {
             gui?.Close();
             gui?.Dispose();
+        }
+
+        private void ShowNewGUI()
+        {
+            DestroyGUI();
 
             gui = new FameBotGUI();
             PluginUtils.ShowGUI(gui);
