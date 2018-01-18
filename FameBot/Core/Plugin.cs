@@ -275,11 +275,6 @@ namespace FameBot.Core
             };
         }
 
-        private void Proxy_StealthStateChanged(bool enabled)
-        {
-            throw new NotImplementedException();
-        }
-
         private void ReceiveCommand(Client client, string cmd, string[] args)
         {
             switch (cmd)
