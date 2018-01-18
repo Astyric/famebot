@@ -174,8 +174,7 @@ namespace FameBot.Core
             obstacles = new List<Obstacle>();
 
             // Initialize and display gui.
-            gui = new FameBotGUI();
-            PluginUtils.ShowGUI(gui);
+            ShowNewGUI();
 
             // Get the config.
             config = ConfigManager.GetConfiguration();
@@ -302,9 +301,7 @@ namespace FameBot.Core
                     client.Notify("FameBot is starting");
                     break;
                 case "gui":
-                    gui?.Close();
-                    gui = new FameBotGUI();
-                    gui.Show();
+                    ShowNewGUI();
                     //gui.SetHandle(flashPtr);
                     break;
                 case "famebot":
@@ -972,6 +969,15 @@ namespace FameBot.Core
                 // Stop moving
                 W_PRESSED = false;
             }
+        }
+
+        private void ShowNewGUI()
+        {
+            gui?.Close();
+            gui?.Dispose();
+
+            gui = new FameBotGUI();
+            PluginUtils.ShowGUI(gui);
         }
     }
 }
