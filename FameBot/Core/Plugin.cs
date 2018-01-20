@@ -522,7 +522,7 @@ namespace FameBot.Core
                 }
 
                 // Obstacles.
-                if (Enum.IsDefined(typeof(ObstacleId), (int)obj.ObjectType))
+                if (obstacleIds.Contains(obj.ObjectType))
                 {
                     if (!obstacles.Exists(obstacle => obstacle.ObjectId == obj.Status.ObjectId))
                         obstacles.Add(new Obstacle(obj.Status.ObjectId, obj.Status.Position));
