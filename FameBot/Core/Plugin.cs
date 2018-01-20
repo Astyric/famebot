@@ -65,7 +65,7 @@ namespace FameBot.Core
         private List<ushort> obstacleIds;
         private Client connectedClient;
         private Location lastLocation = null;
-	private Location lastAverage;
+        private Location lastAverage;
         private bool blockNextAck = false;
         private string preferredRealmName = null;
         #endregion
@@ -175,7 +175,7 @@ namespace FameBot.Core
             enemies = new List<Enemy>();
             obstacles = new List<Obstacle>();
 
-	    // get obstacles
+            // get obstacles
             obstacleIds = new List<ushort>();
             GameData.Objects.Map.ForEach((kvp) =>
             {
@@ -185,6 +185,10 @@ namespace FameBot.Core
                 }
             });
             PluginUtils.Log("FameBot", "Found {0} obstacles.", obstacleIds.Count);
+
+            // Initialize and display gui.
+            gui = new FameBotGUI();
+            PluginUtils.ShowGUI(gui);
 
             // Initialize and display gui if K-Relay is not in stealth mode.
             if (!StealthConfig.Default.StealthEnabled)
@@ -337,13 +341,13 @@ namespace FameBot.Core
                             switch(setting)
                             {
                                 case "realmposition":
-				case "rp":
+                                case "rp":
                                     config.RealmLocation = client.PlayerData.Pos;
                                     ConfigManager.WriteXML(config);
                                     client.Notify("Successfully changed realm position!");
                                     break;
                                 case "fountainposition":
-				case "fp":
+                                case "fp":
                                     config.FountainLocation = client.PlayerData.Pos;
                                     ConfigManager.WriteXML(config);
                                     client.Notify("Successfully changed fountain position!");
@@ -737,7 +741,6 @@ namespace FameBot.Core
                 {
                     lastAverage = targetPosition;
                 }
-
 
                 if (client.PlayerData.Pos.DistanceTo(targetPosition) > config.TeleportDistanceThreshold)
                 {
