@@ -62,8 +62,10 @@ namespace FameBot.Core
         private Dictionary<int, Target> playerPositions;
         private List<Enemy> enemies;
         private List<Obstacle> obstacles;
+        private List<ushort> obstacleIds;
         private Client connectedClient;
         private Location lastLocation = null;
+        private Location lastAverage;
         private bool blockNextAck = false;
         private string preferredRealmName = null;
         #endregion
@@ -173,8 +175,29 @@ namespace FameBot.Core
             enemies = new List<Enemy>();
             obstacles = new List<Obstacle>();
 
+            // get obstacles
+            obstacleIds = new List<ushort>();
+            GameData.Objects.Map.ForEach((kvp) =>
+            {
+                if (kvp.Value.FullOccupy || kvp.Value.OccupySquare)
+                {
+                    obstacleIds.Add(kvp.Key);
+                }
+            });
+            PluginUtils.Log("FameBot", "Found {0} obstacles.", obstacleIds.Count);
+
             // Initialize and display gui.
-            ShowNewGUI();
+            gui = new FameBotGUI();
+            PluginUtils.ShowGUI(gui);
+
+            // Initialize and display gui if K-Relay is not in stealth mode.
+            if (!StealthConfig.Default.StealthEnabled)
+            {
+                ShowGUI();
+            }
+
+            // Hide / show gui based on the stealth mode status.
+            proxy.StealthStateChanged += enabled => { if (enabled) HideGUI(); else ShowGUI(); };
 
             // Get the config.
             config = ConfigManager.GetConfiguration();
@@ -253,6 +276,7 @@ namespace FameBot.Core
                         Stop();
                         break;
                     case GuiEvent.SettingsChanged:
+                        Log("Updated config");
                         config = ConfigManager.GetConfiguration();
                         break;
                 }
@@ -301,7 +325,7 @@ namespace FameBot.Core
                     client.Notify("FameBot is starting");
                     break;
                 case "gui":
-                    ShowNewGUI();
+                    ShowGUI();
                     //gui.SetHandle(flashPtr);
                     break;
                 case "famebot":
@@ -318,11 +342,13 @@ namespace FameBot.Core
                             switch(setting)
                             {
                                 case "realmposition":
+                                case "rp":
                                     config.RealmLocation = client.PlayerData.Pos;
                                     ConfigManager.WriteXML(config);
                                     client.Notify("Successfully changed realm position!");
                                     break;
                                 case "fountainposition":
+                                case "fp":
                                     config.FountainLocation = client.PlayerData.Pos;
                                     ConfigManager.WriteXML(config);
                                     client.Notify("Successfully changed fountain position!");
@@ -516,7 +542,7 @@ namespace FameBot.Core
                 }
 
                 // Obstacles.
-                if (Enum.IsDefined(typeof(ObstacleId), (int)obj.ObjectType))
+                if (obstacleIds.Contains(obj.ObjectType))
                 {
                     if (!obstacles.Exists(obstacle => obstacle.ObjectId == obj.Status.ObjectId))
                         obstacles.Add(new Obstacle(obj.Status.ObjectId, obj.Status.Position));
@@ -697,6 +723,25 @@ namespace FameBot.Core
             {
                 // Get the target position: the average of all current targets.
                 var targetPosition = new Location(targets.Average(t => t.Position.X), targets.Average(t => t.Position.Y));
+                if (lastAverage != null)
+                {
+                    var dir = targetPosition.Subtract(lastAverage);
+                    var faraway = targetPosition.Add(dir.Scale(20));
+                    var desiredTargets = (int)(targets.Count * (config.TrainTargetPercentage / 100f));
+                    List<Target> newTargets = new List<Target>();
+                    for (int i = 0; i < desiredTargets; i++)
+                    {
+                        var closest = targets.OrderBy((t) => t.Position.DistanceSquaredTo(faraway)).First();
+                        newTargets.Add(closest);
+                        targets.RemoveAll((t) => t.Name == closest.Name);
+                    }
+                    targets.AddRange(newTargets);
+                    lastAverage = targetPosition;
+                    targetPosition = new Location(newTargets.Average(t => t.Position.X), newTargets.Average(t => t.Position.Y));
+                } else
+                {
+                    lastAverage = targetPosition;
+                }
 
                 if (client.PlayerData.Pos.DistanceTo(targetPosition) > config.TeleportDistanceThreshold)
                 {
@@ -712,21 +757,29 @@ namespace FameBot.Core
 
                 // There should never be anything in the enemies list if EnableEnemyAvoidance is false,
                 // but just in case, only perform this behaviour if EnableEnemyAvoidance is true.
-                if (config.EnableEnemyAvoidance && enemies.Exists(en => en.Location.DistanceSquaredTo(client.PlayerData.Pos) <= 49))
+                if (config.EnableEnemyAvoidance && enemies.Exists(en => en.Location.DistanceSquaredTo(client.PlayerData.Pos) <= (config.EnemyAvoidanceDistance * config.EnemyAvoidanceDistance)))
                 {
-                    // If there is an enemy within 7 tiles, actively attempt to avoid it.
+                    // If there is an enemy within the specified number of tiles, actively attempt to avoid it.
                     Location closestEnemy = enemies.OrderBy(en => en.Location.DistanceSquaredTo(client.PlayerData.Pos)).First().Location;
+                    double angleDifference = client.PlayerData.Pos.GetAngleDifferenceDegrees(targetPosition, closestEnemy);
 
-                    // Get the angle between the enemy and the player.
-                    double angle = Math.Atan2(client.PlayerData.Pos.Y - closestEnemy.Y, client.PlayerData.Pos.X - closestEnemy.X);
+                    if (Math.Abs(angleDifference) < 70.0)
+                    {
+                        // Get the angle between the enemy and the player.
+                        double angle = Math.Atan2(client.PlayerData.Pos.Y - closestEnemy.Y, client.PlayerData.Pos.X - closestEnemy.X);
+                        if (angleDifference <= 0)
+                            angle += (Math.PI / 2); // add 90 degrees to the angle to go clockwise around the enemy.
+                        if (angleDifference > 0)
+                            angle -= (Math.PI / 2); // remove 90 degrees from the angle to go anti-clockwise around the enemy.
 
-                    // Calculate a point on a 'circle' around the enemy with a radius 8 at the angle specified.
-                    float newX = closestEnemy.X + 8f * (float)Math.Cos(angle);
-                    float newY = closestEnemy.Y + 8f * (float)Math.Sin(angle);
+                        // Calculate a point on a 'circle' around the enemy with a radius 8 at the angle specified.
+                        float newX = closestEnemy.X + config.EnemyAvoidanceDistance * (float)Math.Cos(angle);
+                        float newY = closestEnemy.Y + config.EnemyAvoidanceDistance * (float)Math.Sin(angle);
 
-                    var avoidPos = new Location(newX, newY);
-                    CalculateMovement(client, avoidPos, config.FollowDistanceThreshold);
-                    return;
+                        var avoidPos = new Location(newX, newY);
+                        CalculateMovement(client, avoidPos, config.FollowDistanceThreshold);
+                        return;
+                    }
                 }
 
                 if (obstacles.Exists(obstacle => obstacle.Location.DistanceSquaredTo(client.PlayerData.Pos) <= 4))
@@ -971,12 +1024,17 @@ namespace FameBot.Core
             }
         }
 
-        private void ShowNewGUI()
+		private void HideGUI()
         {
-            gui?.Close();
-            gui?.Dispose();
+			logEvent = null;
+			gui?.Close();
+        }
 
-            gui = new FameBotGUI();
+        private void ShowGUI()
+        {
+			HideGUI();
+
+			gui = new FameBotGUI();
             PluginUtils.ShowGUI(gui);
         }
     }
